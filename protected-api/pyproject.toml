@@ -1,0 +1,21 @@
+[build-system]
+requires = ["hatchling>=1.24.0"]
+build-backend = "hatchling.build"
+
+[project]
+name = "authsdk-sample-protected-api"
+version = "0.1.0"
+description = "SDK-protected FastAPI service for the authSDK sample template."
+requires-python = ">=3.11"
+dependencies = [
+  "auth-service-sdk",
+  "fastapi>=0.115,<1.0",
+  "pydantic-settings>=2.7,<3.0",
+  "uvicorn[standard]>=0.30,<1.0",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["app"]
+
+[tool.uv.sources]
+auth-service-sdk = { path = "../../authSDK/sdk", editable = true }

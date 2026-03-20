@@ -1,0 +1,73 @@
+services:
+  frontend:
+    build:
+      context: .
+      dockerfile: frontend/Dockerfile
+      args:
+        VITE_API_URL: http://127.0.0.1:8100
+    ports:
+      - "5173:80"
+    depends_on:
+      backend:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "-", "http://127.0.0.1/"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  backend:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    environment:
+      APP_HOST: 0.0.0.0
+      APP_PORT: 8100
+      FRONTEND_ORIGIN: http://127.0.0.1:5173
+      AUTH_SERVICE_URL: http://host.docker.internal:8000
+      PROTECTED_API_URL: http://protected-api:8200
+      PROTECTED_API_AUDIENCE: sample-protected-api
+      COOKIE_ACCESS_NAME: sample_access_token
+      COOKIE_REFRESH_NAME: sample_refresh_token
+      COOKIE_SECURE: "false"
+      COOKIE_SAMESITE: lax
+      COOKIE_DOMAIN: ""
+      ACCESS_COOKIE_MAX_AGE_SECONDS: "900"
+      REFRESH_COOKIE_MAX_AGE_SECONDS: "604800"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    ports:
+      - "8100:8100"
+    depends_on:
+      protected-api:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8100/healthz')"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  protected-api:
+    build:
+      context: .
+      dockerfile: protected-api/Dockerfile
+      additional_contexts:
+        authsdk: ../authSDK
+    environment:
+      APP_HOST: 0.0.0.0
+      APP_PORT: 8200
+      AUTH_SERVICE_URL: http://host.docker.internal:8000
+      EXPECTED_AUDIENCE: sample-protected-api
+      AUTHSDK_REPO_PATH: ""
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    ports:
+      - "8200:8200"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8200/healthz')"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
