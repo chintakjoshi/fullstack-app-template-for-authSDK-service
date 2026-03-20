@@ -12,6 +12,8 @@ The browser talks only to the BFF. The BFF talks to `authSDK` and stores the
 issued access/refresh tokens in `HttpOnly` cookies. The downstream API trusts
 the auth service through the SDK and enforces the token audience locally.
 
+![Sample interface](docs/interface.png)
+
 ## Flows Covered
 
 - email/password signup
