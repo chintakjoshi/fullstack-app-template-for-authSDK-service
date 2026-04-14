@@ -1,25 +1,31 @@
 # authSDK Full-Stack Sample Template
 
-This template shows a production-aligned way to consume the sibling `authSDK`
-service:
+This template now demonstrates the browser-session integration model for the
+sibling `authSDK` service:
 
-- `frontend/`: React + TypeScript + Tailwind UI
-- `backend/`: FastAPI backend-for-frontend (BFF)
+- `frontend/`: React + TypeScript + Tailwind UI served on one browser origin
 - `protected-api/`: FastAPI downstream API protected by `auth-service-sdk`
-- `compose.yml`: Docker Compose stack for the sample app services
+- `compose.yml`: Docker Compose stack for the frontend and protected API
+- `backend/`: legacy token-mode BFF reference kept in the repo, but no longer
+  used in the primary browser-session flow
 
-The browser talks only to the BFF. The BFF talks to `authSDK` and stores the
-issued access/refresh tokens in `HttpOnly` cookies. The downstream API trusts
-the auth service through the SDK and enforces the token audience locally.
+The browser now talks to one app origin only:
+
+- `/_auth/*` is proxied to `authSDK`
+- `/api/*` is proxied to `protected-api`
+
+`authSDK` owns the `HttpOnly` access and refresh cookies. The frontend reads
+only the CSRF cookie, and the downstream API trusts the auth service through
+the SDK with cookie extraction enabled.
 
 ![Sample interface](docs/interface.png)
 
 ## Flows Covered
 
 - email/password signup
-- email/password login
+- email/password login with browser-session cookies
 - login OTP verification and resend
-- refresh rotation handled by the BFF
+- refresh rotation through `POST /_auth/token`
 - logout
 - resend email verification before or after login
 - enable login OTP
@@ -27,14 +33,19 @@ the auth service through the SDK and enforces the token audience locally.
 
 Google OAuth is intentionally not included in this first version.
 
-## Repository Layout
+## Browser-Session Topology
 
 ```text
-fullstack-app-template-for-authSDK-service/
-  backend/
-  frontend/
-  protected-api/
+Browser
+  |
+  +--> http://127.0.0.1:5173/_auth/*  -> proxied to authSDK
+  |
+  +--> http://127.0.0.1:5173/api/*    -> proxied to protected-api
 ```
+
+The browser never stores tokens in JavaScript-managed storage. `authSDK`
+sets the access and refresh cookies itself, and the frontend attaches the
+double-submit CSRF token on unsafe requests.
 
 ## Prerequisites
 
@@ -54,6 +65,14 @@ Copy-Item .env-sample .env
 docker compose -f docker\docker-compose.yml up --build
 ```
 
+The current `authSDK/.env-sample` already enables browser sessions with the
+local HTTP cookie baseline:
+
+- `auth_access`
+- `auth_refresh`
+- `auth_csrf`
+- refresh-cookie path `/_auth`
+
 Useful local URLs:
 
 - auth service: `http://127.0.0.1:8000`
@@ -69,16 +88,7 @@ uv sync
 uv run uvicorn app.main:app --reload --host 127.0.0.1 --port 8200
 ```
 
-## 3. Run the BFF
-
-```powershell
-cd .\backend
-Copy-Item .env.example .env
-uv sync
-uv run uvicorn app.main:app --reload --host 127.0.0.1 --port 8100
-```
-
-## 4. Run the Frontend
+## 3. Run the Frontend
 
 ```powershell
 cd .\frontend
@@ -91,16 +101,36 @@ Frontend URL:
 
 - `http://127.0.0.1:5173`
 
+## How the Sample Works
+
+1. The frontend bootstraps CSRF from `GET /_auth/csrf`.
+2. Login and OTP verification go to `/_auth/*` with `credentials: "include"`.
+3. `authSDK` sets the access and refresh cookies on the frontend origin.
+4. The frontend calls `/api/me` and `/api/demo` through the same origin.
+5. `protected-api` accepts the cookie-authenticated request and validates the
+   session with `auth-service-sdk`.
+
+Because the browser stays on one origin, this sample does not need frontend
+code that stores or forwards raw access or refresh tokens.
+
+## OTP + Mailhog Notes
+
+- OTP emails and verification emails land in Mailhog.
+- Use Mailhog to inspect the verification link and OTP codes.
+- Password login is blocked until the account email has been verified.
+- If you want to enable login OTP, verify the email address first.
+- The sample UI can resend the verification email even before the first login.
+- The default authSDK local email links still point at the auth service on
+  port `8000`, which is fine for this sample.
+
 ## Docker Run
 
-This repository now includes Dockerfiles for:
+This repository now containerizes:
 
 - `frontend`
-- `backend`
 - `protected-api`
 
-Because this sample still depends on the sibling `../authSDK` repository, the
-Docker flow assumes:
+The Docker flow assumes:
 
 - the `authSDK` repo is checked out next to this repository
 - the `authSDK` stack is already running and publishing `http://127.0.0.1:8000`
@@ -114,50 +144,21 @@ docker compose up
 
 Containerized app URLs:
 
-- frontend: `http://127.0.0.1:5173`
-- backend BFF: `http://127.0.0.1:8100`
-- protected API: `http://127.0.0.1:8200`
+- frontend app origin: `http://127.0.0.1:5173`
+- protected API debug port: `http://127.0.0.1:8200`
 
-More detail: [docs/docker.md](/c:/Users/chint/Desktop/fullstack-app-template-for-authSDK-service/docs/docker.md)
+The frontend container proxies:
 
-## How the Sample Works
+- `/_auth/*` -> `host.docker.internal:8000/auth/*`
+- `/api/*` -> `protected-api:8200/*`
 
-1. The frontend calls the BFF on `http://127.0.0.1:8100`.
-2. The BFF calls `authSDK` for signup, login, verification-email resend, OTP
-   verification, refresh, and logout.
-3. The BFF stores auth tokens in `HttpOnly` cookies.
-4. The BFF forwards the access token to `protected-api`.
-5. `protected-api` validates that token with `auth-service-sdk` using audience
-   `sample-protected-api`.
-
-Because the browser never calls the auth service directly, the auth service
-does not need CORS for this sample.
-
-## OTP + Mailhog Notes
-
-- OTP emails and verification emails land in Mailhog.
-- Use Mailhog to inspect the verification link and OTP codes.
-- Password login is blocked until the account email has been verified.
-- If you want to enable login OTP, verify the email address first.
-- The sample UI can resend the verification email even before the first login.
+More detail: [docs/docker.md](docs/docker.md)
 
 ## Environment Files
 
-- [backend/.env.example](/c:/Users/chint/Desktop/fullstack-app-template-for-authSDK-service/backend/.env.example)
-- [protected-api/.env.example](/c:/Users/chint/Desktop/fullstack-app-template-for-authSDK-service/protected-api/.env.example)
-- [frontend/.env.example](/c:/Users/chint/Desktop/fullstack-app-template-for-authSDK-service/frontend/.env.example)
-
-## GitHub Push Hygiene
-
-This repo now ignores common local-only files so you can push cleanly:
-
-- `frontend/node_modules/`
-- `frontend/dist/`
-- service `.env` files
-- service `.venv/` folders
-- TypeScript build info files
-
-Keep the `.env.example` files in git and leave real `.env` values local only.
+- [frontend/.env.example](frontend/.env.example)
+- [protected-api/.env.example](protected-api/.env.example)
+- [backend/.env.example](backend/.env.example)
 
 ## No Sample Database
 

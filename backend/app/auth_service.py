@@ -205,6 +205,13 @@ class SampleAuthClient:
         **kwargs: Any,
     ) -> httpx.Response:
         """Execute an HTTP request and normalize connection-level failures."""
+        headers = dict(kwargs.pop("headers", {}))
+        if client is self._auth_client:
+            # This sample expects raw token-pair responses from authSDK, so opt out
+            # of browser-session cookie transport even when the upstream can infer it.
+            headers.setdefault("X-Auth-Session-Transport", "token")
+        if headers:
+            kwargs["headers"] = headers
         try:
             return await client.request(method, url, **kwargs)
         except httpx.RequestError as exc:
