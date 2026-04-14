@@ -5,13 +5,20 @@ FROM python:3.11-slim
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1
 
+ARG AUTHSDK_SDK_GIT_REF=v1.4.3
+
 WORKDIR /app
 
-COPY --from=authsdk /sdk /opt/authsdk-sdk
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends git \
+    && rm -rf /var/lib/apt/lists/*
+
 COPY protected-api/pyproject.toml /app/pyproject.toml
 COPY protected-api/app /app/app
 
-RUN pip install --no-cache-dir /opt/authsdk-sdk .
+RUN pip install --no-cache-dir \
+    "auth-service-sdk @ git+https://github.com/chintakjoshi/authSDK.git@${AUTHSDK_SDK_GIT_REF}#subdirectory=sdk" \
+    .
 
 EXPOSE 8200
 

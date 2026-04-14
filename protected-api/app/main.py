@@ -2,25 +2,9 @@
 
 from __future__ import annotations
 
-import sys
-from pathlib import Path
-
 from app.config import get_settings
 
-
-def _ensure_local_sdk_importable() -> None:
-    """Add the sibling authSDK repository root to sys.path for local development."""
-    settings = get_settings()
-    repo_root = settings.resolved_authsdk_repo_path()
-    if not (repo_root / "sdk" / "__init__.py").exists():
-        return
-    repo_root_str = str(repo_root)
-    if repo_root_str not in sys.path:
-        sys.path.insert(0, repo_root_str)
-
 from fastapi import FastAPI, Request
-
-_ensure_local_sdk_importable()
 
 from sdk import CookieCSRFMiddleware, JWTAuthMiddleware
 

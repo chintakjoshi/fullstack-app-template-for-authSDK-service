@@ -1,6 +1,5 @@
 """Configuration for the protected API."""
 
-from pathlib import Path
 from functools import lru_cache
 
 from pydantic import HttpUrl
@@ -19,16 +18,6 @@ class Settings(BaseSettings):
     access_cookie_name: str = "auth_access"
     csrf_cookie_name: str = "auth_csrf"
     csrf_header_name: str = "X-CSRF-Token"
-    authsdk_repo_path: str | None = None
-
-    def resolved_authsdk_repo_path(self) -> Path:
-        """Return the authSDK repository root used for local sample development."""
-        if self.authsdk_repo_path:
-            return Path(self.authsdk_repo_path).expanduser().resolve()
-        current_file = Path(__file__).resolve()
-        parent_chain = current_file.parents
-        repo_anchor = parent_chain[3] if len(parent_chain) > 3 else parent_chain[len(parent_chain) - 1]
-        return repo_anchor / "authSDK"
 
 
 @lru_cache
