@@ -22,7 +22,7 @@ from fastapi import FastAPI, Request
 
 _ensure_local_sdk_importable()
 
-from sdk import JWTAuthMiddleware
+from sdk import CookieCSRFMiddleware, JWTAuthMiddleware
 
 
 class SampleJWTAuthMiddleware(JWTAuthMiddleware):
@@ -38,9 +38,17 @@ settings = get_settings()
 
 app = FastAPI(title="authSDK sample protected API")
 app.add_middleware(
+    CookieCSRFMiddleware,
+    csrf_cookie_name=settings.csrf_cookie_name,
+    csrf_header_name=settings.csrf_header_name,
+    access_cookie_name=settings.access_cookie_name,
+)
+app.add_middleware(
     SampleJWTAuthMiddleware,
     auth_base_url=str(settings.auth_service_url),
     expected_audience=settings.expected_audience,
+    token_sources=["authorization", "cookie"],
+    access_cookie_name=settings.access_cookie_name,
 )
 
 

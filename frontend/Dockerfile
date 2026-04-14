@@ -1,8 +1,5 @@
 FROM node:20-alpine AS build
 
-ARG VITE_API_URL=http://127.0.0.1:8100
-ENV VITE_API_URL=${VITE_API_URL}
-
 WORKDIR /app
 
 COPY frontend/package.json frontend/package-lock.json ./

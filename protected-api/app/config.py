@@ -16,6 +16,9 @@ class Settings(BaseSettings):
     app_port: int = 8200
     auth_service_url: HttpUrl = "http://127.0.0.1:8000"
     expected_audience: str = "sample-protected-api"
+    access_cookie_name: str = "auth_access"
+    csrf_cookie_name: str = "auth_csrf"
+    csrf_header_name: str = "X-CSRF-Token"
     authsdk_repo_path: str | None = None
 
     def resolved_authsdk_repo_path(self) -> Path:

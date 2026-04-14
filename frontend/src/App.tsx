@@ -16,7 +16,7 @@ import {
   resendVerifyEmail,
   signup,
   verifyLoginOtp,
-} from "./lib/api";
+} from "./api";
 
 function StatusPill({
   label,
@@ -59,10 +59,10 @@ function App() {
     void refreshSession();
   }, []);
 
-  async function refreshSession() {
+  async function refreshSession(forceProbe = false) {
     setLoadingSession(true);
     try {
-      const result = await getSession();
+      const result = await getSession({ forceProbe });
       setSession(result);
       if (!result.authenticated) {
         setProtectedDemo(null);
@@ -111,7 +111,7 @@ function App() {
         setMessage("OTP required. Grab the code from Mailhog and verify it below.");
       } else {
         applyAuthenticated(result);
-        setMessage("Logged in through the BFF. Your browser never talks to the auth service directly.");
+        setMessage("Logged in through the same-origin auth proxy. authSDK now owns the browser-session cookies.");
       }
     } catch (caught) {
       const apiError = caught as ApiError;
@@ -141,7 +141,7 @@ function App() {
     try {
       const result = await verifyLoginOtp(pendingChallenge.challenge_token, otpCode);
       applyAuthenticated(result);
-      setMessage("OTP accepted. Session cookies were stored by the backend.");
+      setMessage("OTP accepted. authSDK set the browser-session cookies through the app origin.");
     } catch (caught) {
       setError(caught as ApiError);
     } finally {
@@ -255,7 +255,7 @@ function App() {
       setSession({ authenticated: false, user: null });
       setPendingChallenge(null);
       setProtectedDemo(null);
-      setMessage("Logged out. The BFF cleared the session cookies.");
+      setMessage("Logged out. authSDK cleared the browser-session cookies.");
     } catch (caught) {
       setError(caught as ApiError);
     } finally {
@@ -277,12 +277,14 @@ function App() {
           <div className="mt-6 grid gap-6 lg:grid-cols-[1.2fr_0.8fr]">
             <div>
               <h1 className="max-w-3xl font-display text-4xl font-semibold tracking-tight text-ink sm:text-6xl">
-                Fast auth flows, BFF cookies, and one SDK-protected API.
+                Fast auth flows, browser-session cookies, and one SDK-protected API.
               </h1>
               <p className="mt-4 max-w-2xl text-lg leading-8 text-slate-600">
-                This sample keeps the browser on the frontend and BFF only. The backend talks to
-                the auth service, stores session cookies, and forwards your access token into a
-                downstream API protected by <code className="font-mono">auth-service-sdk</code>.
+                This sample keeps the browser on one app origin.{" "}
+                <code className="font-mono">/_auth</code> proxies to authSDK,{" "}
+                <code className="font-mono">/api</code> proxies to the downstream service, and{" "}
+                <code className="font-mono">auth-service-sdk</code> validates the same cookies at
+                the API boundary.
               </p>
             </div>
             <div className="rounded-[28px] border border-white/70 bg-white/80 p-5 shadow-glow backdrop-blur">
@@ -303,13 +305,13 @@ function App() {
                   <div className="font-mono text-xs uppercase tracking-[0.18em] text-slate-500">
                     Browser
                   </div>
-                  <div className="mt-1">Frontend calls only the BFF on port 8100.</div>
+                  <div className="mt-1">Frontend uses same-origin proxies for <code className="font-mono">/_auth</code> and <code className="font-mono">/api</code>.</div>
                 </div>
                 <div className="rounded-2xl bg-slate-100/80 p-4">
                   <div className="font-mono text-xs uppercase tracking-[0.18em] text-slate-500">
                     Session
                   </div>
-                  <div className="mt-1">Access and refresh tokens live in HttpOnly cookies.</div>
+                  <div className="mt-1">authSDK owns the HttpOnly access and refresh cookies. The frontend reads only the CSRF cookie.</div>
                 </div>
                 <div className="rounded-2xl bg-slate-100/80 p-4">
                   <div className="font-mono text-xs uppercase tracking-[0.18em] text-slate-500">
@@ -331,8 +333,8 @@ function App() {
               >
                 <h2 className="font-display text-2xl font-semibold text-ink">Create an account</h2>
                 <p className="mt-2 text-sm text-slate-600">
-                  Signup talks to the BFF, which forwards the request to the auth service and sends
-                  a verification email.
+                  Signup goes through the same-origin auth proxy and triggers the verification
+                  email from authSDK.
                 </p>
                 <div className="mt-5 grid gap-4">
                   <label className="grid gap-2 text-sm font-medium text-slate-700">
@@ -377,8 +379,8 @@ function App() {
               >
                 <h2 className="font-display text-2xl font-semibold text-ink">Log in</h2>
                 <p className="mt-2 text-sm text-slate-600">
-                  Login requests audience <code className="font-mono">sample-protected-api</code>.
-                  Unverified accounts must verify email first.
+                  Login requests audience <code className="font-mono">sample-protected-api</code>{" "}
+                  and lets authSDK mint the browser-session cookies directly.
                 </p>
                 <div className="mt-5 grid gap-4">
                   <label className="grid gap-2 text-sm font-medium text-slate-700">
@@ -472,7 +474,7 @@ function App() {
                   <h2 className="font-display text-2xl font-semibold text-ink">Protected API</h2>
                   <p className="mt-2 text-sm text-slate-600">
                     This route is validated by <code className="font-mono">JWTAuthMiddleware</code>{" "}
-                    in the downstream FastAPI service.
+                    plus cookie extraction in the downstream FastAPI service.
                   </p>
                 </div>
                 <button
@@ -504,7 +506,7 @@ function App() {
               ) : (
                 <div className="mt-5 rounded-3xl border border-dashed border-slate-300 p-6 text-sm text-slate-500">
                   Log in first, then load the downstream route to prove the SDK is validating the
-                  audience-scoped token.
+                  audience-scoped session cookie.
                 </div>
               )}
             </div>
@@ -516,7 +518,7 @@ function App() {
                 <h2 className="font-display text-2xl font-semibold text-ink">Current session</h2>
                 <button
                   type="button"
-                  onClick={() => void refreshSession()}
+                  onClick={() => void refreshSession(true)}
                   className="rounded-full border border-slate-300 px-3 py-1.5 text-xs font-semibold uppercase tracking-[0.18em] text-slate-600 transition hover:bg-slate-100"
                 >
                   Refresh
@@ -563,8 +565,7 @@ function App() {
                   <form onSubmit={handleReauth} className="rounded-3xl border border-slate-200 p-4">
                     <div className="font-semibold text-slate-800">Re-authenticate if needed</div>
                     <p className="mt-1 text-sm text-slate-500">
-                      Use this if the auth service asks for a fresh auth time before a sensitive
-                      action.
+                      Use this if authSDK asks for a fresh auth time before a sensitive action.
                     </p>
                     <div className="mt-4 flex flex-col gap-3 sm:flex-row">
                       <input
@@ -597,8 +598,8 @@ function App() {
               ) : (
                 <div className="mt-5 grid gap-4">
                   <div className="rounded-3xl border border-dashed border-slate-300 p-6 text-sm text-slate-500">
-                    No active session. Verify the email first, then log in to create the
-                    BFF-managed cookies.
+                    No active session. Verify the email first, then log in to mint the authSDK
+                    browser-session cookies.
                   </div>
                   <form
                     onSubmit={handleRequestVerifyEmailResend}
@@ -641,7 +642,7 @@ function App() {
               </ol>
               <div className="mt-5 rounded-3xl bg-white/10 p-4 text-xs leading-6 text-slate-200">
                 The auth service is the source of truth for verification and OTP state. This app
-                just makes the BFF and SDK integration path obvious.
+                now shows the same-origin auth-proxy and SDK integration path end to end.
               </div>
             </div>
 
