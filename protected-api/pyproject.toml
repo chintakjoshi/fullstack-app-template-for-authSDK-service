@@ -18,4 +18,4 @@ dependencies = [
 packages = ["app"]
 
 [tool.uv.sources]
-auth-service-sdk = { path = "../../authSDK/sdk", editable = true }
+auth-service-sdk = { git = "https://github.com/chintakjoshi/authSDK.git", tag = "v1.4.3", subdirectory = "sdk" }

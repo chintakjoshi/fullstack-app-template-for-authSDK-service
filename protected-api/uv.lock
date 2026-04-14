@@ -36,22 +36,13 @@ wheels = [
 [[package]]
 name = "auth-service-sdk"
 version = "1.4.1"
-source = { editable = "../../authSDK/sdk" }
+source = { git = "https://github.com/chintakjoshi/authSDK.git?subdirectory=sdk&tag=v1.4.3#808764c43b69e4f4d6a993724cc79bb45870b1f9" }
 dependencies = [
     { name = "authlib" },
     { name = "cachetools" },
     { name = "fastapi" },
     { name = "httpx" },
     { name = "starlette" },
-]
-
-[package.metadata]
-requires-dist = [
-    { name = "authlib", specifier = "==1.6.9" },
-    { name = "cachetools", specifier = "==5.5.2" },
-    { name = "fastapi", specifier = "==0.129.2" },
-    { name = "httpx", specifier = "==0.28.1" },
-    { name = "starlette", specifier = "==0.41.3" },
 ]
 
 [[package]]
@@ -79,7 +70,7 @@ dependencies = [
 
 [package.metadata]
 requires-dist = [
-    { name = "auth-service-sdk", editable = "../../authSDK/sdk" },
+    { name = "auth-service-sdk", git = "https://github.com/chintakjoshi/authSDK.git?subdirectory=sdk&tag=v1.4.3" },
     { name = "fastapi", specifier = ">=0.115,<1.0" },
     { name = "pydantic-settings", specifier = ">=2.7,<3.0" },
     { name = "uvicorn", extras = ["standard"], specifier = ">=0.30,<1.0" },

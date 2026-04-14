@@ -1,22 +1,23 @@
 # authSDK Full-Stack Sample Template
 
-This template now demonstrates the browser-session integration model for the
-sibling `authSDK` service:
+This template demonstrates the browser-session integration model with a
+published auth-service image and one SDK-protected downstream API:
 
-- `frontend/`: React + TypeScript + Tailwind UI served on one browser origin
+- `frontend/`: React + TypeScript + Tailwind app served on one browser origin
 - `protected-api/`: FastAPI downstream API protected by `auth-service-sdk`
-- `compose.yml`: Docker Compose stack for the frontend and protected API
+- `compose.yml`: full local stack, including auth-service, Postgres, Redis, and
+  Mailhog
 - `backend/`: legacy token-mode BFF reference kept in the repo, but no longer
   used in the primary browser-session flow
 
-The browser now talks to one app origin only:
+The browser talks to one app origin only:
 
-- `/_auth/*` is proxied to `authSDK`
+- `/_auth/*` is proxied to auth-service
 - `/api/*` is proxied to `protected-api`
 
-`authSDK` owns the `HttpOnly` access and refresh cookies. The frontend reads
-only the CSRF cookie, and the downstream API trusts the auth service through
-the SDK with cookie extraction enabled.
+The auth service owns the `HttpOnly` access and refresh cookies. The frontend
+reads only the CSRF cookie, and the downstream API validates the same browser
+session through `auth-service-sdk`.
 
 ![Sample interface](docs/interface.png)
 
@@ -38,48 +39,65 @@ Google OAuth is intentionally not included in this first version.
 ```text
 Browser
   |
-  +--> http://127.0.0.1:5173/_auth/*  -> proxied to authSDK
+  +--> http://127.0.0.1:5173/_auth/*  -> proxied to auth-service
   |
   +--> http://127.0.0.1:5173/api/*    -> proxied to protected-api
 ```
 
-The browser never stores tokens in JavaScript-managed storage. `authSDK`
-sets the access and refresh cookies itself, and the frontend attaches the
-double-submit CSRF token on unsafe requests.
+The browser never stores access or refresh tokens in JavaScript-managed
+storage. The auth service sets the cookies itself, and the frontend attaches
+the double-submit CSRF token on unsafe requests.
 
 ## Prerequisites
 
-- the sibling `authSDK` service repo available at `../authSDK`
-- Docker running for the auth service stack
+- Docker Desktop or Docker Engine with Compose
 - Python 3.11+
 - Node.js 18+
 - `uv`
+- internet access the first time you build the stack, so Docker can pull
+  `ghcr.io/chintakjoshi/auth-service:v1.4.3` and `uv` can fetch the SDK source
+  from the matching GitHub tag
 
-## 1. Start authSDK
+## Quick Start With Docker
 
-From the `authSDK` repo:
+The default stack now pulls auth-service directly from GHCR:
+
+- image: `ghcr.io/chintakjoshi/auth-service:v1.4.3`
+
+Start everything from this repository root:
 
 ```powershell
-cd ..\authSDK
-Copy-Item .env-sample .env
-docker compose -f docker\docker-compose.yml up --build
+docker compose up --build
 ```
-
-The current `authSDK/.env-sample` already enables browser sessions with the
-local HTTP cookie baseline:
-
-- `auth_access`
-- `auth_refresh`
-- `auth_csrf`
-- refresh-cookie path `/_auth`
 
 Useful local URLs:
 
+- frontend app origin: `http://127.0.0.1:5173`
 - auth service: `http://127.0.0.1:8000`
 - auth docs: `http://127.0.0.1:8000/docs`
+- protected API debug port: `http://127.0.0.1:8200`
 - Mailhog: `http://127.0.0.1:8025`
 
-## 2. Run the Protected API
+What the compose stack includes:
+
+- `auth-service` from GHCR
+- `postgres`
+- `redis`
+- `mailhog`
+- `protected-api`
+- `frontend`
+
+The compose file uses sane local defaults, but you can still override values
+such as `AUTH_SERVICE_IMAGE`, `APP__PORT`, `POSTGRES_PASSWORD`, or Mailhog
+ports through a standard repo-root `.env` file if needed.
+
+## Local Dev Split
+
+If you want to run only the auth-service dependencies in Docker and keep the
+frontend or protected API on your host:
+
+1. Start the compose stack.
+2. Run the protected API locally if desired:
 
 ```powershell
 cd .\protected-api
@@ -88,7 +106,7 @@ uv sync
 uv run uvicorn app.main:app --reload --host 127.0.0.1 --port 8200
 ```
 
-## 3. Run the Frontend
+3. Run the frontend locally if desired:
 
 ```powershell
 cd .\frontend
@@ -97,15 +115,20 @@ npm install
 npm run dev
 ```
 
-Frontend URL:
+Local development defaults still point at:
 
-- `http://127.0.0.1:5173`
+- auth service: `http://127.0.0.1:8000`
+- protected API: `http://127.0.0.1:8200`
+
+`protected-api/uv sync` now resolves `auth-service-sdk` from the public
+`https://github.com/chintakjoshi/authSDK.git` repository at tag `v1.4.3`
+instead of a sibling `../authSDK` checkout.
 
 ## How the Sample Works
 
 1. The frontend bootstraps CSRF from `GET /_auth/csrf`.
 2. Login and OTP verification go to `/_auth/*` with `credentials: "include"`.
-3. `authSDK` sets the access and refresh cookies on the frontend origin.
+3. The auth service sets the access and refresh cookies on the frontend origin.
 4. The frontend calls `/api/me` and `/api/demo` through the same origin.
 5. `protected-api` accepts the cookie-authenticated request and validates the
    session with `auth-service-sdk`.
@@ -120,39 +143,8 @@ code that stores or forwards raw access or refresh tokens.
 - Password login is blocked until the account email has been verified.
 - If you want to enable login OTP, verify the email address first.
 - The sample UI can resend the verification email even before the first login.
-- The default authSDK local email links still point at the auth service on
-  port `8000`, which is fine for this sample.
-
-## Docker Run
-
-This repository now containerizes:
-
-- `frontend`
-- `protected-api`
-
-The Docker flow assumes:
-
-- the `authSDK` repo is checked out next to this repository
-- the `authSDK` stack is already running and publishing `http://127.0.0.1:8000`
-
-To build and run the sample app containers:
-
-```powershell
-docker compose build
-docker compose up
-```
-
-Containerized app URLs:
-
-- frontend app origin: `http://127.0.0.1:5173`
-- protected API debug port: `http://127.0.0.1:8200`
-
-The frontend container proxies:
-
-- `/_auth/*` -> `host.docker.internal:8000/auth/*`
-- `/api/*` -> `protected-api:8200/*`
-
-More detail: [docs/docker.md](docs/docker.md)
+- The default email verification links still point at the auth service on port
+  `8000`, which is fine for this sample.
 
 ## Environment Files
 
@@ -162,5 +154,8 @@ More detail: [docs/docker.md](docs/docker.md)
 
 ## No Sample Database
 
-This template does not add its own Postgres database. The auth state stays in
-the central auth service, which already owns Postgres and Redis.
+This template does not add its own application database. Auth state stays in
+the central auth service, which owns Postgres and Redis inside the compose
+stack.
+
+More detail: [docs/docker.md](docs/docker.md)
